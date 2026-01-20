@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmos Survivor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- UI Overlay -->
+        <div id="ui-layer">
+            <!-- Main Menu -->
+            <div id="main-menu" class="glass-panel center-screen">
+                <h1>COSMOS SURVIVOR</h1>
+                <p>Survive the infinite void.</p>
+                <button id="start-btn" class="glow-btn">PLAY</button>
+                <div class="controls-hint">
+                    <p>WASD to Move | Mouse to Aim | Click to Shoot | SPACE to Dash</p>
+                </div>
+            </div>
+
+            <!-- HUD (Default Hidden) -->
+            <div id="hud" class="hidden">
+                <!-- Top Right: Game Timer -->
+                <div id="game-timer">00:00</div>
+
+                <!-- Top Center: Zone Progress (Wave/Boss) -->
+                <div id="zone-progress-container">
+                    <div id="zone-progress-label">ZONE PROGRESS</div>
+                    <div id="zone-progress-bar"></div>
+                </div>
+
+                <!-- Top Left: Player Status (HP/Energy) -->
+                <div id="status-bars">
+                    <div id="hp-bar-container">
+                        <div id="hp-bar-fill"></div>
+                        <span id="hp-text">100 / 100</span>
+                    </div>
+                    <div id="energy-bar-container">
+                        <div id="energy-bar-fill"></div>
+                        <!-- <span id="energy-text">100</span> -->
+                    </div>
+                </div>
+
+                <!-- Bottom Center: Inventory (Will be styled in CSS) -->
+                <div id="inventory-panel">
+                    <div class="inv-slot" id="slot-0"></div>
+                    <div class="inv-slot" id="slot-1"></div>
+                    <div class="inv-slot" id="slot-2"></div>
+                    <div class="inv-slot" id="slot-3"></div>
+                    <div class="inv-slot" id="slot-4"></div>
+                </div>
+
+                <!-- Bottom: EXP Bar -->
+                <div id="exp-bar-container">
+                    <div id="exp-bar-fill"></div>
+                    <span id="exp-text">LVL 1 - 0 / 100 XP</span>
+                </div>
+            </div>
+
+            <!-- Stats Panel -->
+
+
+            <!-- Upgrade Menu -->
+            <div id="upgrade-menu" class="glass-panel hidden">
+                <h2>System Upgrade Available</h2>
+                <div id="card-container">
+                    <!-- Cards injected by JS -->
+                </div>
+            </div>
+
+            <!-- Pause Button -->
+            <div id="pause-btn-container">
+                <button id="pause-btn">❚❚</button>
+            </div>
+
+            <!-- Skills/Pause Menu (Tab) -->
+            <div id="skills-menu" class="glass-panel center-screen hidden">
+                <h2>SYSTEM PAUSED</h2>
+                <div class="skills-content">
+                    <div class="column">
+                        <h3>Active Upgrades</h3>
+                        <ul id="skills-list">
+                            <!-- List injected by JS -->
+                        </ul>
+                    </div>
+                </div>
+                <button id="resume-btn" class="glow-btn" style="margin-top: 20px;">RESUME</button>
+            </div>
+
+            <!-- Tooltip -->
+            <div id="tooltip" class="hidden"></div>
+
+            <!-- Game Over Screen -->
+            <div id="game-over-screen" class="glass-panel center-screen hidden">
+                <h2>SIGNAL LOST</h2>
+                <p>Hull Integrity Critical.</p>
+                <button id="restart-btn" class="glow-btn">REBOOT SYSTEM</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Main Module -->
+    <script type="module" src="src/main.js"></script>
+</body>
+
+</html>
