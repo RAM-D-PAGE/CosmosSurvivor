@@ -1,3 +1,5 @@
+import { CONFIG } from '../core/Config.js';
+
 export class Boss {
     constructor(game, x, y, type = 'stage_boss') {
         this.game = game;
@@ -5,31 +7,83 @@ export class Boss {
         this.y = y;
         this.type = type; // 'miniboss' or 'stage_boss'
 
+        const diffMult = game.difficultyMult || 1;
+
         if (this.type === 'miniboss') {
-            this.radius = 60;
-            this.health = 500 * game.level; // Scales with player level
+            const cfg = CONFIG.BOSS.MINI;
+            this.radius = cfg.RADIUS;
+            this.health = cfg.HP_BASE * game.level * diffMult;
             this.maxHealth = this.health;
-            this.speed = 80;
-            this.color = '#ff00aa';
-            this.value = 500;
+            this.speed = cfg.SPEED;
+            this.color = cfg.COLOR;
+            this.value = cfg.VALUE;
+            this.damage = cfg.DAMAGE * diffMult;
+        } else if (this.type === 'secret') {
+            const cfg = CONFIG.BOSS.SECRET;
+            this.radius = cfg.RADIUS;
+            this.health = cfg.HP_BASE * game.level * diffMult; // Huge health
+            this.maxHealth = this.health;
+            this.speed = cfg.SPEED;
+            this.color = cfg.COLOR;
+            this.value = cfg.VALUE;
+            this.damage = cfg.DAMAGE * diffMult;
         } else {
-            this.radius = 120;
-            this.health = 2000 * game.level;
+            const cfg = CONFIG.BOSS.STAGE;
+            this.radius = cfg.RADIUS;
+            this.health = cfg.HP_BASE * game.level * diffMult;
             this.maxHealth = this.health;
-            this.speed = 40;
-            this.color = '#ff0000';
-            this.value = 2000;
+            this.speed = cfg.SPEED;
+            this.color = cfg.COLOR;
+            this.value = cfg.VALUE;
+            this.damage = cfg.DAMAGE * diffMult;
         }
 
         this.angle = 0;
         this.markedForDeletion = false;
 
-        // Ensure Boss Bar exists in DOM or create it?
-        // Ideally Game.js manages the DOM, but for now let's just use a simple approach or add it to index.html later.
-        // For this iteration, we'll just be a big enemy.
+        // Status Effects
+        this.frozen = false;
+        this.frozenTimer = 0;
+        this.poisoned = false;
+        this.poisonDamage = 0;
+        this.poisonTimer = 0;
+        this.doomed = false;
+        this.doomTimer = 0;
+        this.doomDamage = 0;
     }
 
     update(dt) {
+        // Status effect processing
+        if (this.frozen) {
+            this.frozenTimer -= dt;
+            if (this.frozenTimer <= 0) {
+                this.frozen = false;
+            }
+            return; // Can't move while frozen
+        }
+
+        if (this.poisoned) {
+            this.poisonTimer -= dt;
+            this.health -= this.poisonDamage * dt;
+            if (this.poisonTimer <= 0) {
+                this.poisoned = false;
+            }
+            if (this.health <= 0) {
+                // Handle death in next frame via check or immediate
+                this.takeDamage(0); // Trigger death logic
+                return;
+            }
+        }
+
+        if (this.doomed) {
+            this.doomTimer -= dt;
+            if (this.doomTimer <= 0) {
+                this.takeDamage(this.doomDamage);
+                this.game.spawnFloatingText(this.x, this.y, "DOOM!", '#660000');
+                this.doomed = false;
+            }
+        }
+
         // Move towards player
         const player = this.game.player;
         const dx = player.x - this.x;
@@ -56,6 +110,18 @@ export class Boss {
 
             if (this.type === 'stage_boss') {
                 this.game.mapSystem.bossDefeated();
+                // Trigger Mystical Drop
+                if (this.game.triggerBossReward) {
+                    this.game.triggerBossReward();
+                }
+            } else if (this.type === 'secret') {
+                // Trigger Massive Reward
+                if (this.game.triggerSecretReward) {
+                    this.game.triggerSecretReward();
+                }
+            } else if (this.type === 'miniboss') {
+                // Miniboss drops a guaranteed upgrade chest (just exp for now + maybe direct upgrade?)
+                // For now just high XP is fine, maybe a large magnet pickup?
             }
         }
     }
@@ -104,5 +170,25 @@ export class Boss {
         ctx.fillRect(this.x - barWidth / 2, this.y - this.radius - 20, barWidth, barHeight);
         ctx.fillStyle = '#ff0000';
         ctx.fillRect(this.x - barWidth / 2, this.y - this.radius - 20, barWidth * pct, barHeight);
+    }
+    // Status effect methods
+    freeze(duration) {
+        this.frozen = true;
+        this.frozenTimer = duration;
+        // Boss resists freeze duration? Maybe half it?
+        this.frozenTimer = duration * 0.5;
+        this.game.audio.playFreeze();
+    }
+
+    poison(damagePerSec, duration) {
+        this.poisoned = true;
+        this.poisonDamage = damagePerSec;
+        this.poisonTimer = duration;
+    }
+
+    markForDoom(damage, delay) {
+        this.doomed = true;
+        this.doomDamage = damage;
+        this.doomTimer = delay;
     }
 }

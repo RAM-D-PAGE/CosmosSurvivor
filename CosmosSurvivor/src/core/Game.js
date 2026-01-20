@@ -10,6 +10,8 @@ import { AudioSystem } from '../systems/AudioSystem.js';
 import { FloatingText } from '../entities/FloatingText.js';
 import { MapSystem } from '../systems/MapSystem.js';
 import { WeaponSystem } from '../systems/WeaponSystem.js';
+import { SkillSystem } from '../systems/SkillSystem.js';
+import { LeaderboardSystem } from '../systems/LeaderboardSystem.js';
 import { CONFIG } from './Config.js';
 
 export class Game {
@@ -30,7 +32,15 @@ export class Game {
         this.audio = new AudioSystem();
         this.upgradeSystem = new UpgradeSystem(this);
         this.mapSystem = new MapSystem(this);
+        this.mapSystem = new MapSystem(this);
         this.weaponSystem = new WeaponSystem(this);
+        this.weaponSystem = new WeaponSystem(this);
+        this.skillSystem = new SkillSystem(this); // Init skill system
+        this.leaderboardSystem = new LeaderboardSystem(this);
+
+        // Difficulty Settings
+        this.difficulty = 'NORMAL';
+        this.difficultyMult = 1.5;
 
         // Entities
         this.starfield = new Starfield(this);
@@ -40,6 +50,12 @@ export class Game {
         this.gems = [];
         this.particles = [];
         this.floatingTexts = [];
+
+        // Screen Shake State
+        this.shakeX = 0;
+        this.shakeY = 0;
+        this.shakeTimer = 0;
+        this.shakeIntensity = 0;
 
         this.enemySpawnTimer = 0;
         this.enemySpawnInterval = CONFIG.GAME.ENEMY_SPAWN_INTERVAL;
@@ -73,7 +89,15 @@ export class Game {
         this.uiGameOver = document.getElementById('game-over-screen');
 
         document.getElementById('restart-btn').addEventListener('click', () => this.restart());
-        document.getElementById('start-btn').addEventListener('click', () => this.startGame());
+        document.getElementById('quit-btn').addEventListener('click', () => location.reload());
+        document.getElementById('start-btn').addEventListener('click', () => this.showDifficultySelect());
+
+
+
+        document.getElementById('submit-score-btn').addEventListener('click', () => this.submitScore());
+
+        // Difficulty Selection Buttons
+        this.setupDifficultyButtons();
 
         // Start Interaction for Audio Context (usually needs user gesture)
         document.addEventListener('click', () => {
@@ -188,20 +212,161 @@ export class Game {
         this.tooltip.classList.add('hidden');
     }
 
+    addScreenShake(duration, intensity) {
+        this.shakeTimer = duration;
+        this.shakeIntensity = intensity;
+    }
+
+    setupDifficultyButtons() {
+        const diffSelect = document.getElementById('difficulty-select');
+        if (!diffSelect) return;
+
+        diffSelect.querySelectorAll('.diff-btn').forEach(btn => {
+            const diff = btn.dataset.diff;
+            const cfg = CONFIG.DIFFICULTY[diff];
+            if (cfg) {
+                btn.style.borderColor = cfg.color;
+                btn.style.color = cfg.color;
+                btn.addEventListener('click', () => this.selectDifficulty(diff));
+                btn.addEventListener('mouseenter', () => {
+                    btn.style.backgroundColor = cfg.color + '33';
+                    btn.style.boxShadow = `0 0 15px ${cfg.color}`;
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.backgroundColor = 'transparent';
+                    btn.style.boxShadow = 'none';
+                });
+            }
+        });
+
+        // Main Menu Bindings
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) startBtn.addEventListener('click', () => this.showDifficultySelect());
+
+        const openLbBtn = document.getElementById('open-leaderboard-btn');
+        if (openLbBtn) openLbBtn.addEventListener('click', () => this.showLeaderboard(false));
+
+        const closeLbBtn = document.getElementById('close-leaderboard-btn');
+        if (closeLbBtn) closeLbBtn.addEventListener('click', () => this.showMainMenu());
+    }
+
+    showMainMenu() {
+        document.getElementById('leaderboard').classList.add('hidden');
+        document.getElementById('difficulty-select').classList.add('hidden');
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('dash-indicator').classList.add('hidden');
+        const skillsBar = document.getElementById('skills-bar');
+        if (skillsBar) skillsBar.classList.add('hidden');
+
+        const mainMenu = document.getElementById('main-menu');
+        mainMenu.classList.remove('hidden');
+
+        // Ensure Play button is visible (it might have been hidden by difficulty select)
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) startBtn.classList.remove('hidden');
+
+        // Ensure Leaderboard button is visible
+        const lbBtn = document.getElementById('open-leaderboard-btn');
+        if (lbBtn) lbBtn.classList.remove('hidden');
+    }
+
+    // ... (rest of methods)
+
+    showDifficultySelect() {
+        const diffSelect = document.getElementById('difficulty-select');
+        if (diffSelect) {
+            diffSelect.classList.remove('hidden');
+            // Hide the ENTIRE main menu to prevent overlap
+            document.getElementById('main-menu').classList.add('hidden');
+        }
+    }
+
+    // ... (rest of methods)
+
+    restart() {
+        // Reset Stats
+        this.exp = 0;
+        this.level = 1;
+        this.expToNextLevel = 100;
+        this.isPaused = false;
+
+        // Preserve Difficulty (Do not reset to default here, use what was selected)
+        // If undefined, default to NORMAL
+        if (!this.difficulty) this.difficulty = 'NORMAL';
+
+        // Apply Difficulty Multiplier again just to be safe
+        const cfg = CONFIG.DIFFICULTY[this.difficulty];
+        if (cfg) {
+            this.difficultyMult = cfg.mult;
+            this.enemySpawnInterval = CONFIG.GAME.ENEMY_SPAWN_INTERVAL * cfg.spawnRate;
+        }
+
+        this.mapSystem.totalTime = 0;
+
+        // Reset Systems
+        this.player = new Player(this);
+        // FORCE Center Position explicitly (just to be safe)
+        this.player.x = this.canvas.width / 2;
+        this.player.y = this.canvas.height / 2;
+
+        this.mapSystem.reset();
+        this.weaponSystem.reset();
+        this.starfield.speedMultiplier = 1;
+        this.enemies = [];
+        this.projectiles = [];
+        this.gems = [];
+        this.floatingTexts = [];
+        this.particles = [];
+        this.upgradeSystem.reset();
+        this.skillSystem.reset(); // Reset Skills
+
+        this.acquiredUpgrades = [];
+        this.uiCardContainer.innerHTML = '';
+        this.uiUpgradeMenu.classList.add('hidden');
+        document.getElementById('leaderboard').classList.add('hidden');
+
+        this.startGame();
+    }
+
+    selectDifficulty(diff) {
+        const cfg = CONFIG.DIFFICULTY[diff];
+        if (!cfg) return;
+
+        this.difficulty = diff;
+        this.difficultyMult = cfg.mult;
+        this.enemySpawnInterval = CONFIG.GAME.ENEMY_SPAWN_INTERVAL * cfg.spawnRate;
+
+        // Hide difficulty select
+        const diffSelect = document.getElementById('difficulty-select');
+        if (diffSelect) diffSelect.classList.add('hidden');
+
+        // Show difficulty in floating text
+        this.spawnFloatingText(
+            this.canvas.width / 2,
+            this.canvas.height / 2,
+            `${cfg.name.toUpperCase()} MODE`,
+            cfg.color
+        );
+
+        this.startGame();
+    }
+
     startGame() {
         this.gameState = 'PLAYING';
         this.isPaused = false;
 
         // Hide Menu, Show HUD/Stats
         this.uiMainMenu.classList.add('hidden');
-        document.getElementById('hud').classList.remove('hidden'); // Show HUD
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('dash-indicator')?.classList.remove('hidden');
+        document.getElementById('skills-bar')?.classList.remove('hidden');
         this.uiGameOver.classList.add('hidden');
 
         if (this.audio.ctx.state === 'suspended') this.audio.ctx.resume();
 
         // Ensure we have a starter weapon if none exists
         if (this.weaponSystem.activeWeapons.length === 0) {
-            const startingWep = this.weaponSystem.createConfig('ORBITAL', 5, 1.0, 300, '#00f0ff', 'Plasma Drone'); // Use Plasma Drone as default
+            const startingWep = this.weaponSystem.createConfig('ORBITAL', 5, 1.0, 300, '#00f0ff', 'Plasma Drone');
             this.weaponSystem.installWeapon(startingWep);
         }
 
@@ -292,6 +457,7 @@ export class Game {
 
             card.addEventListener('click', () => {
                 choice.apply(this);
+                this.acquiredUpgrades.push({ name: choice.name, color: choice.color });
                 this.closeUpgradeMenu();
             });
 
@@ -325,6 +491,11 @@ export class Game {
     closeUpgradeMenu() {
         this.uiUpgradeMenu.classList.add('hidden');
         this.isPaused = false;
+
+        // Handle accumulated EXP (Multi-level)
+        if (this.exp >= this.expToNextLevel) {
+            this.levelUp();
+        }
     }
 
     updateUI() {
@@ -333,18 +504,20 @@ export class Game {
 
         setText(this.uiExpText, `LVL ${this.level} [${Math.floor(this.exp)} / ${this.expToNextLevel} XP]`);
 
-        // Timer
+        // Timer - Format as MM:SS
         const totalSeconds = Math.floor(this.mapSystem.totalTime || 0);
-        setText(this.uiGameTimer, totalSeconds);
+        const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const secs = (totalSeconds % 60).toString().padStart(2, '0');
+        setText(this.uiGameTimer, `${mins}:${secs}`);
 
         // Zone Progress
         if (this.mapSystem.currentZone) {
             const zoneTime = this.mapSystem.timer;
             const zoneDuration = this.mapSystem.currentZone.duration;
             const zonePct = Math.min((zoneTime / zoneDuration) * 100, 100);
-            this.uiZoneBar.style.width = `${zonePct}% `;
+            this.uiZoneBar.style.width = `${zonePct}%`;
 
-            let label = "ZONE PROGRESS";
+            let label = `ZONE ${this.mapSystem.zoneCount + 1}`;
             let color = "white";
             if (this.mapSystem.waitingForKill) {
                 label = "STAGE BOSS DETECTED";
@@ -355,17 +528,88 @@ export class Game {
             }
             setText(this.uiZoneLabel, label);
             this.uiZoneLabel.style.color = color;
+
+            // Optional: Larger Zone Display somewhere else? 
+            // For now, this replaces "ZONE PROGRESS" with "ZONE 1", "ZONE 2" etc.
         }
 
         // Stats
         if (this.player) {
             // HP & Energy
             const hpPct = (this.player.hp / this.player.maxHp) * 100;
-            this.uiHpBar.style.width = `${Math.max(0, hpPct)}% `;
+            this.uiHpBar.style.width = `${Math.max(0, hpPct)}%`;
             setText(this.uiHpText, `${Math.ceil(this.player.hp)} / ${this.player.maxHp}`);
 
             const enPct = (this.player.energy / this.player.maxEnergy) * 100;
             this.uiEnergyBar.style.width = `${Math.max(0, enPct)}%`;
+
+            // === FIX: EXP BAR UPDATING ===
+            const expPct = Math.min((this.exp / this.expToNextLevel) * 100, 100);
+            this.uiExpBar.style.width = `${expPct}%`;
+
+            // Dash Indicator
+            const dashIndicator = document.getElementById('dash-indicator');
+            const dashChargesDiv = document.getElementById('dash-charges');
+            const dashText = document.getElementById('dash-text');
+
+            if (dashIndicator) dashIndicator.classList.remove('hidden');
+
+            // Active Skills Display
+            const skillsBar = document.getElementById('skills-bar');
+            if (skillsBar) {
+                skillsBar.classList.remove('hidden');
+                // We have 3 fixed slots: skill-0, skill-1, skill-2
+                const slots = [document.getElementById('skill-0'), document.getElementById('skill-1'), document.getElementById('skill-2')];
+                const activeSkills = this.skillSystem ? this.skillSystem.activeSkills : [];
+
+                slots.forEach((slot, index) => {
+                    if (!slot) return;
+                    const skill = activeSkills[index];
+                    if (skill) {
+                        // Calculate cooldown percentage
+                        const cd = skill.currentCooldown / skill.cooldown; // 0 to 1
+                        const fillHeight = Math.max(0, cd * 100);
+
+                        // Set content
+                        slot.style.borderColor = skill.color;
+                        slot.style.background = `linear-gradient(to top, rgba(0,0,0,0.8) ${fillHeight}%, ${skill.color}22 ${fillHeight}%)`;
+
+                        // Add letter/icon
+                        slot.innerHTML = `<span style="font-size:12px; color:${skill.color}; text-shadow:0 0 2px black;">${skill.name.charAt(0)}</span>`;
+
+                        if (cd > 0) {
+                            slot.classList.add('cooldown');
+                        } else {
+                            slot.classList.remove('cooldown');
+                        }
+                    } else {
+                        slot.style.borderColor = '#444';
+                        slot.style.background = 'transparent';
+                        slot.innerHTML = '';
+                    }
+                });
+            }
+
+            if (dashChargesDiv) {
+                dashChargesDiv.innerHTML = '';
+                for (let i = 0; i < this.player.dashCount; i++) {
+                    const pip = document.createElement('div');
+                    pip.className = 'dash-pip' + (i < this.player.dashCharges ? ' active' : '');
+                    dashChargesDiv.appendChild(pip);
+                }
+            }
+
+            if (dashText) {
+                if (this.player.dashCharges < this.player.dashCount) {
+                    // Show remaining time like "0.5s"
+                    const timeLeft = Math.max(0, this.player.dashCooldownTimer).toFixed(1);
+                    dashText.innerText = `CD: ${timeLeft}s`;
+                    dashText.style.color = '#ffaa00';
+                } else {
+                    dashText.innerText = 'READY';
+                    dashText.style.color = '#00f0ff';
+                }
+            }
         }
 
         // Inventory (Optimized)
@@ -427,7 +671,81 @@ export class Game {
 
     gameOver() {
         this.isPaused = true;
-        document.getElementById('game-over-screen').classList.remove('hidden');
+        const screen = document.getElementById('game-over-screen');
+        screen.classList.remove('hidden');
+
+        // Calculate Score
+        this.finalScore = Math.floor(this.exp + (this.mapSystem.totalTime * 10) + (this.enemiesKilled || 0) * 5);
+        document.getElementById('final-score').innerText = `SCORE: ${this.finalScore}`;
+
+        document.getElementById('player-name-input').value = '';
+        document.getElementById('submit-score-btn').style.display = 'inline-block';
+    }
+
+    submitScore() {
+        const nameInput = document.getElementById('player-name-input');
+        const name = nameInput.value.toUpperCase() || 'UNKNOWN';
+
+        this.leaderboardSystem.saveScore({
+            name: name,
+            score: this.finalScore,
+            level: this.level,
+            difficulty: this.difficulty || 'NORMAL',
+            date: new Date().toLocaleDateString()
+        });
+
+        document.getElementById('submit-score-btn').style.display = 'none';
+        this.showLeaderboard(true);
+    }
+
+    async showLeaderboard(fromGameOver = false) {
+        const board = document.getElementById('leaderboard');
+        const list = document.getElementById('score-list');
+        list.innerHTML = '<li style="color:#aaa">Loading Scores...</li>';
+
+        board.classList.remove('hidden');
+        if (!fromGameOver) {
+            this.uiMainMenu.classList.add('hidden');
+        }
+
+        const scores = await this.leaderboardSystem.getHighScores();
+        list.innerHTML = '';
+
+        if (scores.length === 0) {
+            list.innerHTML = '<li style="color:#aaa">No scores recorded yet.</li>';
+            return;
+        }
+
+        scores.forEach((s, i) => {
+            const li = document.createElement('li');
+            li.style.color = i === 0 ? '#ff00ea' : '#fff';
+            li.style.listStyle = 'none';
+            li.style.padding = '5px 0';
+            li.style.fontSize = '18px';
+            li.innerHTML = `<b>${i + 1}. ${s.name}</b> <span style="color:${this.getDifficultyColor(s.difficulty)}">[${s.difficulty || 'NORMAL'}]</span> - ${s.score} <span style="font-size:12px; color:#888">(LVL ${s.level})</span>`;
+            li.innerHTML = `<b>${i + 1}. ${s.name}</b> <span style="color:${this.getDifficultyColor(s.difficulty)}">[${s.difficulty || 'NORMAL'}]</span> - ${s.score} <span style="font-size:12px; color:#888">(LVL ${s.level})</span>`;
+            list.appendChild(li);
+        });
+
+        // Show Restart Button in Leaderboard if coming from Game Over
+        const restartBtn = document.getElementById('leaderboard-restart-btn');
+        if (restartBtn) {
+            if (fromGameOver) {
+                restartBtn.style.display = 'block';
+                restartBtn.onclick = () => {
+                    document.getElementById('leaderboard').classList.add('hidden');
+                    this.restart();
+                };
+            } else {
+                restartBtn.style.display = 'none';
+            }
+        }
+    }
+
+    getDifficultyColor(diff) {
+        if (!diff) return '#fff';
+        const cfg = CONFIG.DIFFICULTY[diff];
+        return cfg ? cfg.color : '#fff';
     }
 
     restart() {
@@ -437,27 +755,148 @@ export class Game {
         this.expToNextLevel = 100;
         this.isPaused = false;
 
-        // Reset Entities
-        this.player = new Player(this);
-        this.projectiles = [];
-        this.enemies = [];
-        this.gems = [];
-        this.particles = [];
-        this.floatingTexts = [];
+        // Preserve Difficulty (Do not reset to default here, use what was selected)
+        // If undefined, default to NORMAL
+        if (!this.difficulty) this.difficulty = 'NORMAL';
 
-        // Reset Steps
+        // Apply Difficulty Multiplier again just to be safe
+        const cfg = CONFIG.DIFFICULTY[this.difficulty];
+        if (cfg) {
+            this.difficultyMult = cfg.mult;
+            this.enemySpawnInterval = CONFIG.GAME.ENEMY_SPAWN_INTERVAL * cfg.spawnRate;
+        }
+
+        this.mapSystem.totalTime = 0;
+
+        // Reset Systems
+        this.player = new Player(this);
         this.mapSystem.reset();
         this.weaponSystem.reset();
+        this.starfield.speedMultiplier = 1;
+        this.enemies = [];
+        this.projectiles = [];
+        this.gems = [];
+        this.floatingTexts = [];
+        this.particles = [];
+        this.upgradeSystem.reset();
+        this.skillSystem.reset(); // Reset Skills
 
-        // Add Default Weapon (so user isn't empty)
-        const startingWep = this.weaponSystem.createConfig('ORBITAL', 5, 1.0, 300, '#00f0ff', 'Plasma Drone');
-        this.weaponSystem.installWeapon(startingWep);
+        this.acquiredUpgrades = [];
+        this.uiCardContainer.innerHTML = '';
+        this.uiUpgradeMenu.classList.add('hidden');
+        document.getElementById('leaderboard').classList.add('hidden');
 
-        // Reset UI
-        document.getElementById('game-over-screen').classList.add('hidden');
-        document.getElementById('upgrade-menu').classList.add('hidden'); // Fix persistence
-        document.getElementById('hud').classList.remove('hidden');
+        this.startGame();
+    }
+
+
+    triggerSecretReward() {
+        this.isPaused = true;
+
+        // Massive XP Boost (5 Levels)
+        // We set XP to exactly what's needed for next 5 levels
+        let levelsToGain = 5;
+        for (let i = 0; i < levelsToGain; i++) {
+            this.level++;
+            this.expToNextLevel = Math.floor(this.expToNextLevel * 1.2);
+        }
         this.updateUI();
+        this.spawnFloatingText(this.player.x, this.player.y, "LEVEL OVERDRIVE!", '#ff00ea');
+
+        // Card Selection Logic
+        // We want user to pick 3 cards.
+        this.secretRewardPicks = 3;
+        this.showSecretCardSelection();
+    }
+
+    showSecretCardSelection() {
+        this.uiCardContainer.innerHTML = '';
+
+        // Generate 3 Mystical Cards
+        const cards = [];
+        for (let i = 0; i < 3; i++) {
+            cards.push(this.upgradeSystem.cardSystem.generateMysticalCard());
+        }
+
+        cards.forEach((choice, index) => {
+            const card = document.createElement('div');
+            card.className = 'skill-card';
+            // Animation for secret cards
+            card.style.animation = `mystical-pulse ${1 + index * 0.2}s infinite`;
+
+            card.innerHTML = `
+                <h3 style="color:${choice.color}; text-shadow:0 0 10px ${choice.color}">SECRET REWARD</h3>
+                <h2 style="color:white; margin:10px 0">${choice.name}</h2>
+                <p>${choice.description}</p>
+                <div style="margin-top:15px; font-size:14px; color:#fff">PICKS LEFT: ${this.secretRewardPicks}</div>
+            `;
+
+            card.style.borderColor = choice.color;
+            card.style.boxShadow = `0 0 20px ${choice.color}`;
+
+            card.addEventListener('click', () => {
+                choice.apply(this);
+                this.spawnFloatingText(this.player.x, this.player.y, "POWER ACCEPTED", choice.color);
+
+                this.secretRewardPicks--;
+                if (this.secretRewardPicks > 0) {
+                    this.showSecretCardSelection(); // Refresh for next pick
+                } else {
+                    this.closeUpgradeMenu();
+                    this.spawnFloatingText(this.player.x, this.player.y, "SYSTEM OVERLOAD COMPLETE", "#ff00ea");
+                }
+            });
+
+            this.uiCardContainer.appendChild(card);
+        });
+
+        // Hide Reroll
+        const rerollBtn = document.getElementById('reroll-btn-container');
+        if (rerollBtn) rerollBtn.style.display = 'none';
+
+        this.uiUpgradeMenu.classList.remove('hidden');
+    }
+
+    triggerBossReward() {
+        // Pause Game
+        this.isPaused = true;
+
+        // Generate Mystical Skill Drop
+        const skill = this.skillSystem.generateBossSkillDrop();
+
+        // Create special single-card menu or reuse upgrade menu with 1 choice
+        this.uiCardContainer.innerHTML = '';
+
+        const card = document.createElement('div');
+        card.className = 'skill-card';
+        card.innerHTML = `
+            <h3 style="color:${skill.color}; text-shadow:0 0 10px ${skill.color}">MYSTICAL DROP</h3>
+            <h2 style="color:white; margin:10px 0">${skill.name}</h2>
+            <p>${skill.description}</p>
+            <div class="mystical-glow" style="margin-top:15px; font-size:12px; color:#aaa">BOSS REWARD</div>
+        `;
+
+        card.style.borderColor = skill.color;
+        card.style.boxShadow = `0 0 20px ${skill.color}`;
+
+        // On Click -> Equip
+        card.addEventListener('click', () => {
+            this.skillSystem.equipSkill(skill.id);
+            this.acquiredUpgrades.push({
+                name: `Skill: ${skill.name}`,
+                color: skill.color
+            });
+            this.closeUpgradeMenu();
+            this.spawnFloatingText(this.player.x, this.player.y, "POWER ACQUIRED", skill.color);
+        });
+
+        this.uiCardContainer.appendChild(card);
+
+        // Hide Reroll if present
+        const rerollBtn = document.getElementById('reroll-btn-container');
+        if (rerollBtn) rerollBtn.style.display = 'none';
+
+        this.uiUpgradeMenu.classList.remove('hidden');
     }
 
     resize() {
@@ -481,7 +920,10 @@ export class Game {
         this.draw();
 
         // Critical: Update UI every frame for Timer, Energy, HP
-        this.updateUI();
+        // Critical: Update UI every frame for Timer, Energy, HP
+        if (this.gameState === 'PLAYING' || this.gameState === 'GAME_OVER') {
+            this.updateUI();
+        }
 
         requestAnimationFrame(this.loop);
     }
@@ -491,6 +933,17 @@ export class Game {
         // Margins: 5% of screen size on each side (90% free in middle)
         const marginX = this.canvas.width * 0.05;
         const marginY = this.canvas.height * 0.05;
+
+        // Screen Shake Logic
+        if (this.shakeTimer > 0) {
+            this.shakeTimer -= dt;
+            const magnitude = this.shakeIntensity || 5;
+            this.shakeX = (Math.random() - 0.5) * magnitude * 2;
+            this.shakeY = (Math.random() - 0.5) * magnitude * 2;
+        } else {
+            this.shakeX = 0;
+            this.shakeY = 0;
+        }
 
         // Player position in screen space (if camera were static)
         // We want ScreenPos = WorldPos - CameraPos
@@ -519,6 +972,7 @@ export class Game {
         this.mapSystem.update(dt);
         this.player.update(dt);
         if (this.weaponSystem) this.weaponSystem.update(dt);
+        if (this.skillSystem) this.skillSystem.update(dt);
 
         // Difficulty Scaling
         this.difficultyMultiplier += (dt / 60) * 0.5;
@@ -615,6 +1069,7 @@ export class Game {
                     this.player.hp -= collisionDmg;
                     this.updateUI();
                     this.spawnFloatingText(this.player.x, this.player.y, `-${collisionDmg}`, '#ff0000');
+                    this.addScreenShake(0.3, 5); // Shake on hit
 
                     // Knockback?
                     const angle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
@@ -648,7 +1103,10 @@ export class Game {
         // --- WORLD SPACE RENDERING ---
         this.ctx.save();
         // Translate context by negative camera position
-        this.ctx.translate(-this.camera.x, -this.camera.y);
+        // Translate context by negative camera position + shake
+        let shakeX = this.shakeX || 0;
+        let shakeY = this.shakeY || 0;
+        this.ctx.translate(-this.camera.x + shakeX, -this.camera.y + shakeY);
 
         // Draw Entities
         this.gems.forEach(g => g.draw(this.ctx));
@@ -656,9 +1114,10 @@ export class Game {
         this.projectiles.forEach(p => p.draw(this.ctx));
         this.player.draw(this.ctx);
         this.particles.forEach(p => p.draw(this.ctx));
-        this.floatingTexts.forEach(t => t.draw(this.ctx)); // Text in world space
+        this.floatingTexts.forEach(t => t.draw(this.ctx));
 
         if (this.weaponSystem) this.weaponSystem.draw(this.ctx);
+        if (this.skillSystem) this.skillSystem.draw(this.ctx);
 
         this.ctx.restore();
         // --- END WORLD SPACE ---

@@ -485,3 +485,246 @@ canvas {
 .hidden {
     display: none !important;
 }
+
+/* ============= NEW UI ELEMENTS ============= */
+
+/* Difficulty Selection */
+#difficulty-select {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    /* Increased gap slightly */
+    justify-content: center;
+    max-width: 600px;
+    pointer-events: auto;
+
+    /* Center positioning */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+}
+
+.diff-btn {
+    background: transparent;
+    border: 2px solid #888;
+    color: #888;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    font-family: var(--font-main);
+    border-radius: 5px;
+    min-width: 120px;
+}
+
+.diff-btn:hover {
+    transform: scale(1.05);
+}
+
+/* Dash Indicator */
+#dash-indicator {
+    position: absolute;
+    bottom: 100px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+#dash-charges {
+    display: flex;
+    gap: 5px;
+}
+
+.dash-pip {
+    width: 12px;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    transition: all 0.3s;
+}
+
+.dash-pip.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+#dash-text {
+    font-size: 10px;
+    color: #888;
+    letter-spacing: 1px;
+}
+
+/* Skills Bar */
+#skills-bar {
+    position: absolute;
+    bottom: 100px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    pointer-events: auto;
+}
+
+.skill-slot {
+    width: 50px;
+    height: 50px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 10px;
+    color: #aaa;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.skill-slot:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+.skill-slot.active {
+    border-color: var(--secondary-color);
+    background: rgba(255, 0, 234, 0.1);
+}
+
+.skill-slot .skill-icon {
+    font-size: 20px;
+}
+
+.skill-slot .skill-key {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 10px;
+    color: #00f0ff;
+    font-weight: bold;
+}
+
+.skill-slot .skill-cooldown {
+    position: absolute;
+    bottom: 2px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #ff0055;
+}
+
+/* Skill cooldown overlay */
+.skill-slot .cooldown-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    transition: height 0.1s linear;
+}
+
+/* Status effects on player */
+.status-effect {
+    position: absolute;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: bold;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Enhanced weapon tooltip */
+#tooltip b {
+    color: var(--primary-color);
+}
+
+/* Rarity colors */
+.rarity-common {
+    color: #ffffff;
+}
+
+.rarity-uncommon {
+    color: #00ff00;
+}
+
+.rarity-rare {
+    color: #00ccff;
+}
+
+.rarity-epic {
+    color: #a335ee;
+}
+
+.rarity-legendary {
+    color: #ff8000;
+}
+
+/* Boss warning */
+.boss-warning {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    font-weight: bold;
+    color: #ff0000;
+    text-shadow: 0 0 20px #ff0000;
+    animation: flash 0.5s infinite;
+}
+
+@keyframes flash {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* Mystical skill glow */
+.mystical-glow {
+    animation: mystical-pulse 2s infinite;
+}
+
+@keyframes mystical-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 10px #aa00ff, 0 0 20px #aa00ff;
+    }
+
+    50% {
+        box-shadow: 0 0 20px #ff00aa, 0 0 40px #ff00aa;
+    }
+}

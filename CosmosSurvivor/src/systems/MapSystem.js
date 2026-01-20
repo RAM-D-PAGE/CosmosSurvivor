@@ -59,14 +59,48 @@ export class MapSystem {
         if (depth === 0) hazard = 'NONE';
 
         // 3. Generate Spawn Table based on Depth/Difficulty
-        // Base weights
-        let weights = { 'chaser': 10, 'shooter': 0, 'dasher': 0, 'tank': 0, 'swarmer': 0 };
+        // Base weights - expanded for new enemy types
+        let weights = {
+            'chaser': 10,
+            'shooter': 0,
+            'dasher': 0,
+            'tank': 0,
+            'swarmer': 0,
+            'duplicator': 0,
+            'adaptive': 0,
+            'bomber': 0,
+            'teleporter': 0,
+            'shielder': 0,
+            'healer': 0,
+            'swarm_mother': 0,
+            'ghost': 0
+        };
 
-        // Difficulty scaling logic
-        if (depth > 0) weights['shooter'] += depth * 2;
-        if (depth > 1) weights['dasher'] += depth * 2;
-        if (depth > 2) weights['tank'] += depth * 1.5;
-        if (depth > 2) weights['swarmer'] += depth * 3;
+        // Progressive difficulty scaling - unlock new enemies per zone
+        if (depth > 0) {
+            weights['shooter'] += depth * 2;
+            weights['swarmer'] += depth * 2;
+        }
+        if (depth > 1) {
+            weights['dasher'] += depth * 2;
+            weights['bomber'] += depth * 1.5;
+        }
+        if (depth > 2) {
+            weights['tank'] += depth * 1.5;
+            weights['teleporter'] += depth * 1.5;
+            weights['ghost'] += depth * 1;
+        }
+        if (depth > 3) {
+            weights['duplicator'] += depth * 1.5;
+            weights['shielder'] += depth * 1;
+        }
+        if (depth > 4) {
+            weights['adaptive'] += depth * 1;
+            weights['healer'] += depth * 0.8;
+        }
+        if (depth > 5) {
+            weights['swarm_mother'] += depth * 0.5;
+        }
 
         // Normalize
         const total = Object.values(weights).reduce((a, b) => a + b, 0);
@@ -92,11 +126,14 @@ export class MapSystem {
 
         this.timer += dt;
 
-        // Apply Debuffs using currentZone
+        // Calculate wave-based multipliers
+        this.waveExpMultiplier = 1 + (this.zoneCount * 0.15); // +15% per zone
+        this.waveDamageMultiplier = 1 + (this.zoneCount * 0.1); // +10% per zone
+
+        // Apply Debuffs using currentZone (preserve upgrades)
+        const baseSpeed = this.game.player.baseStats?.maxSpeed || 400;
         if (this.currentZone.debuff === 'SLOW') {
-            this.game.player.maxSpeed = 200;
-        } else {
-            this.game.player.maxSpeed = 400;
+            this.game.player.maxSpeed = Math.max(150, this.game.player.maxSpeed * 0.5);
         }
 
         if (this.currentZone.debuff === 'CORROSION') {
@@ -109,6 +146,13 @@ export class MapSystem {
             this.game.player.fireRateMultiplier = 1.0;
         }
 
+        // Secret Boss Spawn Logic (Dynamic Probability)
+        // Base 0.05% + increasing by time (guarantees spawn eventually)
+        const spawnChance = 0.0005 + (this.totalTime * 0.0001);
+
+        if (!this.secretBossSpawned && this.game.level >= 5 && Math.random() < spawnChance) {
+            this.spawnSecretBoss();
+        }
         // MiniBoss at 50%
         if (!this.miniBossSpawned && this.timer > this.currentZone.duration * 0.5) {
             this.spawnBoss('miniboss');
@@ -125,12 +169,26 @@ export class MapSystem {
         }
     }
 
+    getExpMultiplier() {
+        return this.waveExpMultiplier || 1;
+    }
+
+    getDamageMultiplier() {
+        return this.waveDamageMultiplier || 1;
+    }
+
     spawnBoss(type) {
         const angle = Math.random() * Math.PI * 2;
         const dist = 600;
         const x = this.game.player.x + Math.cos(angle) * dist;
         const y = this.game.player.y + Math.sin(angle) * dist;
         this.game.enemies.push(new Boss(this.game, x, y, type));
+    }
+
+    spawnSecretBoss() {
+        this.secretBossSpawned = true;
+        this.spawnBoss('secret');
+        this.game.spawnFloatingText(this.game.player.x, this.game.player.y - 200, "WARNING: ANOMALY DETECTED", "#bf00ff");
     }
 
     bossDefeated() {
@@ -173,6 +231,7 @@ export class MapSystem {
         this.zoneCount = 0;
         this.bossSpawned = false;
         this.miniBossSpawned = false;
+        this.secretBossSpawned = false; // Reset secret boss state
         this.waitingForKill = false;
         this.hazardTimer = 0;
 

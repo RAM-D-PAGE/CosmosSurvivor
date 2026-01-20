@@ -37,11 +37,11 @@ export class Player {
         this.hp = this.maxHp;
         this.maxEnergy = 100;
         this.energy = this.maxEnergy;
-        this.energy = this.maxEnergy;
-        this.energy = this.maxEnergy;
         this.energyRegen = 20; // per second
         this.pickupRange = 150; // Base Magnet Range
         this.hpRegen = 0; // Base HP Regen
+        this.dashCount = 1; // Number of dash charges
+        this.dashCharges = this.dashCount; // Current available dashes
 
         // Stats
         this.angle = 0;
@@ -111,9 +111,18 @@ export class Player {
         this.fireRate = this.baseFireRate * this.fireRateMultiplier;
         const input = this.game.input;
 
+        // Calculate Movement Input
+        let ax = 0;
+        let ay = 0;
+        if (input.isKeyPressed('KeyW') || input.isKeyPressed('ArrowUp')) ay = -1;
+        if (input.isKeyPressed('KeyS') || input.isKeyPressed('ArrowDown')) ay = 1;
+        if (input.isKeyPressed('KeyA') || input.isKeyPressed('ArrowLeft')) ax = -1;
+        if (input.isKeyPressed('KeyD') || input.isKeyPressed('ArrowRight')) ax = 1;
+
         // Dash Input (Uses Energy)
-        if (input.isKeyPressed('Space') && this.dashCooldownTimer <= 0 && !this.isDashing && this.energy >= 30) {
+        if (input.isKeyPressed('Space') && this.dashCharges > 0 && !this.isDashing && this.energy >= 30) {
             this.energy -= 30;
+            this.dashCharges--;
             this.startDash(input);
         }
 
@@ -132,121 +141,153 @@ export class Player {
                 if (Math.random() > 0.5) {
                     this.game.spawnParticles(this.x, this.y, 1, '#00f0ff');
                 }
+                this.isInvulnerable = false; // Reset invulnerability
+            }
+            // Move fast in dashDir
+            this.velocity.x = this.dashDir.x * this.dashSpeed;
+            this.velocity.y = this.dashDir.y * this.dashSpeed;
+
+            // Invulnerable during dash? Optional.
+            // Create trail effect
+            if (Math.random() > 0.5) {
+                this.game.spawnParticles(this.x, this.y, 1, '#00f0ff');
+            }
+        } else {
+            // Normal Movement
+            if (ax !== 0 || ay !== 0) {
+                // Normalize
+                const len = Math.sqrt(ax * ax + ay * ay);
+                ax /= len;
+                ay /= len;
+
+                this.velocity.x += ax * this.acceleration * dt;
+                this.velocity.y += ay * this.acceleration * dt;
+            }
+
+            // Apply Friction (Always apply to ensure we stop)
+            // Using time-corrected friction: result = vel * friction^(dt * 60)
+            const frictionFactor = Math.pow(this.friction, dt * 60);
+            this.velocity.x *= frictionFactor;
+            this.velocity.y *= frictionFactor;
+
+            // Stop completely if very slow
+            if (Math.abs(this.velocity.x) < 10) this.velocity.x = 0;
+            if (Math.abs(this.velocity.y) < 10) this.velocity.y = 0;
+        }
+
+        // Dash Cooldown
+        if (this.dashCharges < this.dashCount) {
+            this.dashCooldownTimer -= dt;
+            if (this.dashCooldownTimer <= 0) {
+                this.dashCharges++;
+                this.dashCooldownTimer = this.dashCooldown; // Reset timer
             }
         }
 
-        // Input Handling (Normal Movement)
-        if (!this.isDashing) {
-            let dx = 0;
-            let dy = 0;
-
-            if (input.isKeyPressed('KeyW')) dy = -1;
-            if (input.isKeyPressed('KeyS')) dy = 1;
-            if (input.isKeyPressed('KeyA')) dx = -1;
-            if (input.isKeyPressed('KeyD')) dx = 1;
-
-            // Normalize input vector
-            if (dx !== 0 || dy !== 0) {
-                const length = Math.sqrt(dx * dx + dy * dy);
-                dx /= length;
-                dy /= length;
-            }
-
-            // Apply Acceleration
-            this.velocity.x += dx * this.acceleration * dt;
-            this.velocity.y += dy * this.acceleration * dt;
-
-            // Apply Friction
-            this.velocity.x *= Math.pow(this.friction, dt * 60);
-            this.velocity.y *= Math.pow(this.friction, dt * 60);
+        // Apply Speed Cap
+        const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
+        if (currentSpeed > this.maxSpeed) {
+            const scale = this.maxSpeed / currentSpeed;
+            this.velocity.x *= scale;
+            this.velocity.y *= scale;
         }
 
         // Safety check for NaN
         if (isNaN(this.velocity.x)) this.velocity.x = 0;
         if (isNaN(this.velocity.y)) this.velocity.y = 0;
 
-        // Position Update
+        // Apply Position
         this.x += this.velocity.x * dt;
         this.y += this.velocity.y * dt;
 
-        // No Boundary Constraint for Infinite World
-        // if (this.x < 0) ... removed
-
-        // Rotation (Look at mouse)
+        // Rotation (Aiming)
         const mouse = input.getMousePosition();
 
-        // Player Position in Screen Space
-        // If camera exists, subtract camera pos. If not (early frame), use 0.
-        const camX = this.game.camera ? this.game.camera.x : 0;
-        const camY = this.game.camera ? this.game.camera.y : 0;
+        // Auto Aim Logic
+        if (this.autoAim) {
+            let closest = null;
+            let minDist = 600;
 
-        const playerScreenX = this.x - camX;
-        const playerScreenY = this.y - camY;
+            this.game.enemies.forEach(e => {
+                if (e.markedForDeletion) return;
+                const dx = e.x - this.x;
+                const dy = e.y - this.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d < minDist) {
+                    minDist = d;
+                    closest = e;
+                }
+            });
 
-        this.angle = Math.atan2(mouse.y - playerScreenY, mouse.x - playerScreenX);
+            if (closest) {
+                const dx = closest.x - this.x;
+                const dy = closest.y - this.y;
+                this.angle = Math.atan2(dy, dx);
+            } else if (input.mouseMoved) {
+                const camX = this.game.camera ? this.game.camera.x : 0;
+                const camY = this.game.camera ? this.game.camera.y : 0;
+                const dx = mouse.x - (this.x - camX);
+                const dy = mouse.y - (this.y - camY);
+                this.angle = Math.atan2(dy, dx);
+            }
+        } else {
+            // Standard Mouse Aim
+            const camX = this.game.camera ? this.game.camera.x : 0;
+            const camY = this.game.camera ? this.game.camera.y : 0;
+            const dx = mouse.x - (this.x - camX);
+            const dy = mouse.y - (this.y - camY);
+            this.angle = Math.atan2(dy, dx);
+        }
 
         // Shooting
-        this.handleShooting(dt, input);
+        this.fireTimer = (this.fireTimer || 0) + dt;
+        const fireInterval = 1 / Math.max(0.1, (this.baseFireRate * this.fireRateMultiplier));
+        const isFiring = input.isMouseDown() || this.autoShoot;
+
+        if (isFiring && this.fireTimer >= fireInterval) {
+            this.fireTimer = 0;
+            this.shoot();
+        }
     }
 
     startDash(input) {
         this.isDashing = true;
-        this.isInvulnerable = true;
         this.dashTimer = this.dashDuration;
-        this.dashCooldownTimer = this.dashCooldown;
+        this.isInvulnerable = true;
 
-        // Dash direction
+        // Determine Dash Direction
         let dx = 0;
         let dy = 0;
-        if (input.isKeyPressed('KeyW')) dy = -1;
-        if (input.isKeyPressed('KeyS')) dy = 1;
-        if (input.isKeyPressed('KeyA')) dx = -1;
-        if (input.isKeyPressed('KeyD')) dx = 1;
+        if (input.isKeyPressed('KeyW') || input.isKeyPressed('ArrowUp')) dy = -1;
+        if (input.isKeyPressed('KeyS') || input.isKeyPressed('ArrowDown')) dy = 1;
+        if (input.isKeyPressed('KeyA') || input.isKeyPressed('ArrowLeft')) dx = -1;
+        if (input.isKeyPressed('KeyD') || input.isKeyPressed('ArrowRight')) dx = 1;
 
         if (dx === 0 && dy === 0) {
-            // Dash towards mouse (Screen Space math)
-            const mouse = input.getMousePosition();
-            const camX = this.game.camera ? this.game.camera.x : 0;
-            const camY = this.game.camera ? this.game.camera.y : 0;
-            const playerScreenX = this.x - camX;
-            const playerScreenY = this.y - camY;
-
-            const angle = Math.atan2(mouse.y - playerScreenY, mouse.x - playerScreenX);
-            dx = Math.cos(angle);
-            dy = Math.sin(angle);
+            // Dash in facing direction
+            this.dashDir = { x: Math.cos(this.angle), y: Math.sin(this.angle) };
         } else {
             // Normalize
-            const length = Math.sqrt(dx * dx + dy * dy);
-            dx /= length;
-            dy /= length;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            this.dashDir = { x: dx / len, y: dy / len };
         }
 
-        this.velocity.x = dx * this.dashSpeed;
-        this.velocity.y = dy * this.dashSpeed;
-
-        // Dash Sound?
-        // Check if Game implies audio exists? Game.js has specific methods
-        // But Player doesn't have direct access to game.audio unless we assume this.game exposes it.
-        // It does: using this.game.audio.
-        if (this.game.audio) this.game.audio.playDash();
-    }
-
-    handleShooting(dt, input) {
-        if (this.shootTimer > 0) this.shootTimer -= dt;
-
-        if (input.isMouseDown() && this.shootTimer <= 0) {
-            this.shoot();
-            this.shootTimer = 1 / this.fireRate;
-        }
+        this.game.spawnParticles(this.x, this.y, 10, '#00f0ff');
+        this.game.audio.playDash();
     }
 
     shoot() {
-        const spread = 0.1; // Radians
-        const startAngle = this.angle - (spread * (this.projectileCount - 1)) / 2;
+        // Basic projectile
+        const damage = this.damage;
+        const speed = this.projectileSpeed;
 
-        for (let i = 0; i < this.projectileCount; i++) {
-            const angle = startAngle + i * spread;
-            this.game.spawnProjectile(this.x, this.y, angle, this.projectileSpeed, this.damage);
+        // Multishot logic
+        const totalShots = this.projectileCount;
+        const spread = 0.2; // Radians
+
+        for (let i = 0; i < totalShots; i++) {
+            const angleOffset = totalShots > 1 ? (i - (totalShots - 1) / 2) * spread : 0;
+            this.game.spawnProjectile(this.x, this.y, this.angle + angleOffset, speed, damage);
         }
     }
 
@@ -255,20 +296,25 @@ export class Player {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
 
-        // Draw Ship Body (Triangle)
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        ctx.fillStyle = 'rgba(0, 240, 255, 0.2)';
-
+        // Player Triangle
+        ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.moveTo(20, 0); // Nose
-        ctx.lineTo(-15, 15); // Back Right
-        ctx.lineTo(-5, 0); // Engine
-        ctx.lineTo(-15, -15); // Back Left
+        ctx.moveTo(15, 0);
+        ctx.lineTo(-10, 10);
+        ctx.lineTo(-5, 0);
+        ctx.lineTo(-10, -10);
         ctx.closePath();
-
         ctx.fill();
-        ctx.stroke();
+
+        // Spiked Hull Visual
+        if (this.collisionDamage > 0) {
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(20, 0);
+            ctx.lineTo(10, 5); // Spike
+            ctx.stroke();
+        }
 
         ctx.restore();
     }

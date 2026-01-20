@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cosmos Survivor</title>
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -19,9 +22,24 @@
             <div id="main-menu" class="glass-panel center-screen">
                 <h1>COSMOS SURVIVOR</h1>
                 <p>Survive the infinite void.</p>
-                <button id="start-btn" class="glow-btn">PLAY</button>
+                <div class="menu-buttons">
+                    <button id="start-btn" class="glow-btn">PLAY</button>
+                    <button id="open-leaderboard-btn" class="glow-btn"
+                        style="margin-top:10px; border-color:#ff00ea; color:#ff00ea">LEADERBOARD</button>
+                </div>
                 <div class="controls-hint">
                     <p>WASD to Move | Mouse to Aim | Click to Shoot | SPACE to Dash</p>
+                </div>
+            </div>
+
+
+            <div id="leaderboard" class="hidden glass-panel center-screen">
+                <h2>HIGH SCORES</h2>
+                <ul id="score-list"></ul>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button id="leaderboard-restart-btn" class="glow-btn" style="display:none; flex:1;">PLAY
+                        AGAIN</button>
+                    <button id="close-leaderboard-btn" class="glow-btn" style="flex:1;">CLOSE</button>
                 </div>
             </div>
 
@@ -97,14 +115,44 @@
             <!-- Tooltip -->
             <div id="tooltip" class="hidden"></div>
 
+            <!-- Dash Cooldown Indicator -->
+            <div id="dash-indicator" class="hidden">
+                <div id="dash-charges"></div>
+                <span id="dash-text">DASH</span>
+            </div>
+
+            <!-- Active Skills Bar -->
+            <div id="skills-bar" class="hidden">
+                <div class="skill-slot" id="skill-0"></div>
+                <div class="skill-slot" id="skill-1"></div>
+                <div class="skill-slot" id="skill-2"></div>
+            </div>
+
+            <!-- Difficulty Selection (Main Menu) -->
+            <div id="difficulty-select" class="hidden">
+                <button class="diff-btn" data-diff="EASY">EASY</button>
+                <button class="diff-btn" data-diff="NORMAL">NORMAL</button>
+                <button class="diff-btn" data-diff="HARD">HARD</button>
+                <button class="diff-btn" data-diff="ABYSS">ABYSS</button>
+                <button class="diff-btn" data-diff="HELL">HELL</button>
+                <button class="diff-btn" data-diff="IMPOSSIBLE">IMPOSSIBLE</button>
+            </div>
+
+
+
             <!-- Game Over Screen -->
             <div id="game-over-screen" class="glass-panel center-screen hidden">
                 <h2>SIGNAL LOST</h2>
                 <p>Hull Integrity Critical.</p>
+                <div id="final-score" style="margin: 20px; font-size: 24px; color: #00fff2;"></div>
+                <input type="text" id="player-name-input" placeholder="ENTER NAME" maxlength="10"
+                    style="padding: 10px; font-size: 18px; text-transform: uppercase;">
+                <button id="submit-score-btn" class="glow-btn" style="margin-top: 10px;">SAVE SCORE</button>
                 <button id="restart-btn" class="glow-btn">REBOOT SYSTEM</button>
+                <button id="quit-btn" class="glow-btn"
+                    style="margin-top: 10px; border-color: #ff0055; color: #ff0055;">QUIT GAME</button>
             </div>
         </div>
-    </div>
     </div>
 
     <!-- Main Module -->
